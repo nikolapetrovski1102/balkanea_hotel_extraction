@@ -2,6 +2,7 @@ import os
 from zstandard import ZstdDecompressor
 import json
 from datetime import date
+from collections import defaultdict
 
 def parse_dump(filename: str, output_file: str) -> None:
     """
@@ -11,6 +12,8 @@ def parse_dump(filename: str, output_file: str) -> None:
     """
     extracted_hotels = []  # To store hotel data
     count = 0  # Track number of hotels processed
+    # regions = []
+    grouped_hotels = defaultdict(list)
 
     with open(filename, "rb") as fh:
         # Make decompressor
@@ -30,8 +33,14 @@ def parse_dump(filename: str, output_file: str) -> None:
                         line = previous_line + line
                     try:
                         hotel_data = json.loads(line)
-                        if hotel_data['region']['name'] == 'Berovo':
-                            extracted_hotels.append(hotel_data)
+                        # if hotel_data['region']['country_code'] == 'GR':
+                            # regions.append((hotel_data['region']['name'],hotel_data['region']['id']))
+                        if hotel_data['region']['id'] == 3186 and hotel_data['region']['country_code'] == 'GR':
+                            extracted_hotels.append({
+                                "hotel_id": hotel_data["id"],
+                                'hotel_region_id': hotel_data['region']['id'],
+                                'hotel_region_name': hotel_data['region']['name']
+                            })
                             count += 1
                     except json.JSONDecodeError:
                         print(f"Error decoding JSON line: {line}")
@@ -40,13 +49,26 @@ def parse_dump(filename: str, output_file: str) -> None:
     # Ensure directory exists before writing the file
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
 
+    for hotel in extracted_hotels:
+        region_id = hotel["hotel_region_id"]
+        grouped_hotels[region_id].append(hotel["hotel_id"])
+
+    # Convert defaultdict to regular dict for JSON serialization
+    final_structure = {region_id: hotels for region_id, hotels in grouped_hotels.items()}
+
     # Save the extracted data to a JSON file
     with open(output_file, "w") as f:
-        json.dump(extracted_hotels, f, indent=4)
+        json.dump(final_structure, f, indent=4)
+
+    # Convert to DataFrame
+    # df = pd.DataFrame(regions, columns=["Region ID", "Region Name"])
+    # Remove duplicates while keeping the first occurrence
+    # df_unique = df.drop_duplicates().reset_index(drop=True)
+    # df_unique.to_excel("Greece_regions.xlsx", index=False)
 
 
 if __name__ == "__main__":
-    zstd_filename = "feed_en_v3.json.zst"  # Your actual file
+    zstd_filename = "feed_en_v3 (3).json.zst"  # Your actual file
 
     # Define output directory and filename
     output_dir = "output"
